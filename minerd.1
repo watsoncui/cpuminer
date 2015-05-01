@@ -1,4 +1,4 @@
-.TH MINERD 1 "November 2013" "cpuminer 2.3.2"
+.TH MINERD 1 "April 2015" "cpuminer 2.4.2"
 .SH NAME
 minerd \- CPU miner for Bitcoin and Litecoin
 .SH SYNOPSIS
@@ -7,14 +7,15 @@ minerd \- CPU miner for Bitcoin and Litecoin
 .SH DESCRIPTION
 .B minerd
 is a multi-threaded CPU miner for Bitcoin, Litecoin and other cryptocurrencies.
-It supports the getwork mining protocol as well as the Stratum mining protocol.
+It supports the getwork and getblocktemplate (BIP 22) methods,
+as well as the Stratum mining protocol.
 .PP
 In its normal mode of operation, \fBminerd\fR connects to a mining server
 (specified with the \fB\-o\fR option), receives work from it and starts hashing.
 As soon as a solution is found, it is submitted to the same mining server,
 which can accept or reject it.
-When using the getwork protocol, \fBminerd\fR can take advantage
-of the long polling extension, if the server supports it;
+When using getwork or getblocktemplate,
+\fBminerd\fR can take advantage of long polling, if the server supports it;
 in any case, fresh work is fetched as needed.
 When using the Stratum protocol this is not possible,
 and the server is responsible for sending fresh work at least every minute;
@@ -46,7 +47,8 @@ authenticating with username "rpcuser" and password "rpcpass":
 .PP
 .nf
 .RS
-minerd \-a sha256d \-o http://localhost:18332 \-O rpcuser:rpcpass
+minerd \-a sha256d \-o http://localhost:18332 \-O rpcuser:rpcpass \\
+	\-\-coinbase\-addr=mpXwg4jMtRhuSpVq4xS3HFHmCmWp9NyGKt
 .RE
 .fi
 .PP
@@ -70,6 +72,9 @@ Possible values are:
 .B scrypt
 scrypt(1024, 1, 1) (used by Litecoin)
 .TP
+.B scrypt:\fIN\fR
+scrypt(\fIN\fR, 1, 1) (\fIN\fR must be a power of 2 greater than 1)
+.TP
 .B sha256d
 SHA-256d (used by Bitcoin)
 .RE
@@ -81,8 +86,17 @@ Run in offline benchmark mode.
 Run in the background as a daemon.
 .TP
 \fB\-\-cert\fR=\fIFILE\fR
-Set a SSL certificate to use with the mining server.
+Set an SSL certificate to use with the mining server.
 Only supported when using the HTTPS protocol.
+.TP
+\fB\-\-coinbase\-addr\fR=\fIADDRESS\fR
+Set a payout address for solo mining.
+This is only used in getblocktemplate mode,
+and only if the server does not provide a coinbase transaction.
+.TP
+\fB\-\-coinbase\-sig\fR=\fITEXT\fR
+Set a string to be included in the coinbase (if allowed by the server).
+This is only used in getblocktemplate mode.
 .TP
 \fB\-c\fR, \fB\-\-config\fR=\fIFILE\fR
 Load options from a configuration file.
@@ -106,21 +120,34 @@ Enable debug output.
 \fB\-h\fR, \fB\-\-help\fR
 Print a help message and exit.
 .TP
+\fB\-\-no\-gbt\fR
+Do not use the getblocktemplate RPC method.
+.TP
+\fB\-\-no\-getwork\fR
+Do not use the getwork RPC method.
+.TP
 \fB\-\-no\-longpoll\fR
 Do not use long polling.
+.TP
+\fB\-\-no\-redirect\fR
+Ignore requests from the server to switch to a different URL.
 .TP
 \fB\-\-no\-stratum\fR
 Do not switch to Stratum, even if the server advertises support for it.
 .TP
 \fB\-o\fR, \fB\-\-url\fR=[\fISCHEME\fR://][\fIUSERNAME\fR[:\fIPASSWORD\fR]@]\fIHOST\fR:\fIPORT\fR[/\fIPATH\fR]
 Set the URL of the mining server to connect to.
-Supported schemes are \fBhttp\fR, \fBhttps\fR and \fBstratum+tcp\fR.
-If no scheme is specified, http is used.
+Supported schemes are \fBhttp\fR, \fBhttps\fR, \fBstratum+tcp\fR
+and \fBstratum+tcps\fR.
+If no scheme is specified, http is assumed.
 Specifying a \fIPATH\fR is only supported for HTTP and HTTPS.
 Specifying credentials has the same effect as using the \fB\-O\fR option.
-If no mining server is provided,
-the miner will try to connect to http://127.0.0.1:9332/,
-corresponding to the default settings for a local Litecoin daemon.
+
+By default, on HTTP and HTTPS,
+the miner tries to use the getblocktemplate RPC method,
+and falls back to using getwork if getblocktemplate is unavailable.
+This behavior can be modified by using the \fB\-\-no\-gbt\fR
+and \fB\-\-no\-getwork\fR options.
 .TP
 \fB\-O\fR, \fB\-\-userpass\fR=\fIUSERNAME\fR:\fIPASSWORD\fR
 Set the credentials to use for connecting to the mining server.
@@ -157,7 +184,7 @@ If not specified, the miner will try to detect the number of available processor
 and use that.
 .TP
 \fB\-T\fR, \fB\-\-timeout\fR=\fISECONDS\fR
-Set the timeout for long polling. Default is 270 seconds.
+Set a timeout for long polling.
 .TP
 \fB\-u\fR, \fB\-\-user\fR=\fIUSERNAME\fR
 Set the username to use for connecting to the mining server.
@@ -166,13 +193,12 @@ Any username previously set with \fB\-O\fR is discarded.
 \fB\-V\fR, \fB\-\-version\fR
 Display version information and quit.
 .TP
-\fB\-x\fR, \fB\-\-proxy\fR=[\fISCHEME\fR://]\fIHOST\fR:\fIPORT\fR
+\fB\-x\fR, \fB\-\-proxy\fR=[\fISCHEME\fR://][\fIUSERNAME\fR:\fIPASSWORD\fR@]\fIHOST\fR:\fIPORT\fR
 Connect to the mining server through a proxy.
 Supported schemes are: \fBhttp\fR, \fBsocks4\fR, \fBsocks5\fR.
 Since libcurl 7.18.0, the following are also supported:
 \fBsocks4a\fR, \fBsocks5h\fR (SOCKS5 with remote name resolving).
 If no scheme is specified, the proxy is treated as an HTTP proxy.
-HTTP proxies cannot be used to connect to Stratum servers.
 .SH ENVIRONMENT
 The following environment variables can be specified in lower case or upper case;
 the lower-case version has precedence. \fBhttp_proxy\fR is an exception

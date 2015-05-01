@@ -123,9 +123,11 @@ static inline void le32enc(void *pp, uint32_t x)
 #endif
 
 #if JANSSON_MAJOR_VERSION >= 2
-#define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
+#define JSON_LOADS(str, err_ptr) json_loads(str, 0, err_ptr)
+#define JSON_LOAD_FILE(path, err_ptr) json_load_file(path, 0, err_ptr)
 #else
-#define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
+#define JSON_LOADS(str, err_ptr) json_loads(str, err_ptr)
+#define JSON_LOAD_FILE(path, err_ptr) json_load_file(path, err_ptr)
 #endif
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
@@ -134,27 +136,28 @@ void sha256_init(uint32_t *state);
 void sha256_transform(uint32_t *state, const uint32_t *block, int swap);
 void sha256d(unsigned char *hash, const unsigned char *data, int len);
 
-#if defined(__ARM_NEON__) || defined(__i386__) || defined(__x86_64__)
+#ifdef USE_ASM
+#if defined(__ARM_NEON__) || defined(__ALTIVEC__) || defined(__i386__) || defined(__x86_64__)
 #define HAVE_SHA256_4WAY 1
 int sha256_use_4way();
 void sha256_init_4way(uint32_t *state);
 void sha256_transform_4way(uint32_t *state, const uint32_t *block, int swap);
 #endif
-
 #if defined(__x86_64__) && defined(USE_AVX2)
 #define HAVE_SHA256_8WAY 1
 int sha256_use_8way();
 void sha256_init_8way(uint32_t *state);
 void sha256_transform_8way(uint32_t *state, const uint32_t *block, int swap);
 #endif
+#endif
 
 extern int scanhash_sha256d(int thr_id, uint32_t *pdata,
 	const uint32_t *ptarget, uint32_t max_nonce, unsigned long *hashes_done);
 
-extern unsigned char *scrypt_buffer_alloc();
+extern unsigned char *scrypt_buffer_alloc(int N);
 extern int scanhash_scrypt(int thr_id, uint32_t *pdata,
 	unsigned char *scratchbuf, const uint32_t *ptarget,
-	uint32_t max_nonce, unsigned long *hashes_done);
+	uint32_t max_nonce, unsigned long *hashes_done, int N);
 
 struct thr_info {
 	int		id;
@@ -169,9 +172,12 @@ struct work_restart {
 
 extern bool opt_debug;
 extern bool opt_protocol;
+extern bool opt_redirect;
 extern int opt_timeout;
 extern bool want_longpoll;
 extern bool have_longpoll;
+extern bool have_gbt;
+extern bool allow_getwork;
 extern bool want_stratum;
 extern bool have_stratum;
 extern char *opt_cert;
@@ -184,11 +190,17 @@ extern int longpoll_thr_id;
 extern int stratum_thr_id;
 extern struct work_restart *work_restart;
 
+#define JSON_RPC_LONGPOLL	(1 << 0)
+#define JSON_RPC_QUIET_404	(1 << 1)
+
 extern void applog(int prio, const char *fmt, ...);
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-	const char *rpc_req, bool, bool, int *);
-extern char *bin2hex(const unsigned char *p, size_t len);
+	const char *rpc_req, int *curl_err, int flags);
+extern void bin2hex(char *s, const unsigned char *p, size_t len);
+extern char *abin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
+extern int varint_encode(unsigned char *p, uint64_t n);
+extern size_t address_to_script(unsigned char *out, size_t outsz, const char *addr);
 extern int timeval_subtract(struct timeval *result, struct timeval *x,
 	struct timeval *y);
 extern bool fulltest(const uint32_t *hash, const uint32_t *target);
